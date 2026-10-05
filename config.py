@@ -2,7 +2,7 @@ import os
 
 # ========== НАСТРОЙКИ БОТА ==========
 # Токен можно задать либо тут, либо через переменную окружения BOT_TOKEN (безопаснее)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8855452873:AAHjcbQ8ocWb2zeCHoCC4VX70njwATNtbes")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8855452873:AAFetAxETjc8P-6qASHRIgxdpojGhMuhx-k")
 
 # ID администраторов (узнать свой: @userinfobot)
 ADMIN_IDS = [7893682340]
