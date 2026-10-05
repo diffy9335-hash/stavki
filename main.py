@@ -39,7 +39,7 @@ class SubscribeMiddleware(BaseMiddleware):
                 if isinstance(event, Message):
                     await event.answer(text, reply_markup=kb)
                 elif isinstance(event, CallbackQuery):
-                    await event.answer("📢 Подпишитесь на канал @StavkiRofl!", show_alert=True)
+                    await event.answer("📢 Подпишитесь на канал @StavkiRoflf!", show_alert=True)
                 return
         return await handler(event, data)
 
