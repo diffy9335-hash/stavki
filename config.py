@@ -35,7 +35,7 @@ GIFT_COMMISSION = 0.10    # комиссия 10%
 RATE_LIMIT = 15           # максимум апдейтов от пользователя за 10 секунд
 
 # --- Обязательная подписка (None или @channel / -100...) ---
-CHANNEL_ID = "@StavkiRofl"
+CHANNEL_ID = "@StavkiRoflf"
 CHANNEL_URL = "https://t.me/StavkiRofl"  # для кнопки «Подписаться»
 
 # --- Достижения: код -> (название, награда) ---
