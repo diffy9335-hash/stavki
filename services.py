@@ -82,8 +82,13 @@ async def resettle_match_full(bot, match_id, new_result, new_btts):
     changes = await resettle_match(match_id, new_result, new_btts)
     for uid, won, pot, coef in changes:
         if won:
-            await _notify(bot, uid, f"⚠️ Результат матча #{match_id} изменён — ваша ставка теперь выиграла: +{pot} монет.")
+            await _notify(bot, uid,
+                          f"⚠️ Результат матча #{match_id} изменён — ваша ставка теперь ВЫИГРАЛА. "
+                          f"Начислено: +{pot} монет.")
         else:
-            await _notify(bot, uid, f"⚠️ Результат матча #{match_id} изменён — ваша ставка теперь проиграла.")
+            await _notify(bot, uid,
+                          f"⚠️ Результат матча #{match_id} изменён — ваша ставка теперь ПРОИГРАЛА. "
+                          f"С баланса списан ранее выплаченный выигрыш: −{pot} монет. "
+                          f"Это не новая ставка, а отмена выплаты.")
         await ach.check_bet(bot, uid, coef)
     await resettle_coupons(bot, match_id)
