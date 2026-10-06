@@ -1,4 +1,6 @@
 import asyncio
+import re
+from datetime import datetime
 from aiogram import Router, F, Bot
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, FSInputFile
 from aiogram.filters import Command
@@ -40,6 +42,7 @@ class AStates(StatesGroup):
     ban = State()
     unban = State()
     promo_new = State()
+    match_bulk = State()
     match_teams = State()
     match_coefs = State()
     match_time = State()
@@ -114,6 +117,56 @@ def parse_btts(text: str):
     if t in ("нет", "no", "н"):
         return "no"
     return None
+
+
+# ---------- массовое добавление матчей ----------
+
+_NUM = r"\d+(?:[.,]\d+)?"
+_DATE_RE = re.compile(
+    r"(?:(?P<iso>\d{4})-(?P<im>\d{1,2})-(?P<id>\d{1,2})"
+    r"|(?P<d>\d{1,2})\.(?P<m>\d{1,2})(?:\.(?P<y>\d{4}))?)"
+    r"[ T,]+(?P<hh>\d{1,2}):(?P<mm>\d{2})")
+_COEFS_TAIL_RE = re.compile(rf"((?:{_NUM}[\s|;]+){{4}}{_NUM})\s*$")
+_TEAMS_SPLIT_RE = re.compile(r"\s+[-–—]\s+|\s+vs\.?\s+", re.I)
+
+
+def parse_match_line(line: str):
+    """Одна строка -> (team1, team2, coefs[5], start_time) или строка с ошибкой."""
+    raw = re.sub(r"<[^>]*>", " ", line).strip()
+    dm = _DATE_RE.search(raw)
+    if not dm:
+        return None, "не найдена дата и время (пример: 2026-10-06 21:00)"
+    if dm.group("iso"):
+        y, mo, d = int(dm.group("iso")), int(dm.group("im")), int(dm.group("id"))
+    else:
+        y = int(dm.group("y") or datetime.now().year)
+        mo, d = int(dm.group("m")), int(dm.group("d"))
+    hh, mi = int(dm.group("hh")), int(dm.group("mm"))
+    try:
+        start_time = datetime(y, mo, d, hh, mi).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return None, "неверная дата или время"
+    rest = (raw[:dm.start()] + " " + raw[dm.end():]).strip(" |;,\t")
+    cm = _COEFS_TAIL_RE.search(rest)
+    if not cm:
+        return None, "не найдено 5 коэффициентов (П1 X П2 Да Нет)"
+    coefs = [float(x.replace(",", ".")) for x in re.findall(_NUM, cm.group(1))]
+    if any(c <= 1.0 for c in coefs):
+        return None, "коэффициенты должны быть больше 1.0"
+    teams = rest[:cm.start()].strip(" |;,")
+    parts = _TEAMS_SPLIT_RE.split(teams, maxsplit=1)
+    if len(parts) != 2 and "-" in teams:
+        parts = teams.split("-", 1)
+    if len(parts) != 2 or not parts[0].strip() or not parts[1].strip():
+        return None, "не удалось определить команды (формат: Команда1 - Команда2)"
+    return (parts[0].strip(" |;,"), parts[1].strip(" |;,"), coefs, start_time), None
+
+
+def after_add_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [btn("➕ Добавить ещё", "adm:add")],
+        [btn("⚽ Матчи", "adm:matches"), btn("⬅️ Админ-меню", "adm:menu")],
+    ])
 
 
 # ---------------- ВХОД ----------------
@@ -453,8 +506,66 @@ async def adm_matches(c: CallbackQuery):
     await c.answer()
 
 
+BULK_HELP = (
+    "➕ <b>Добавление матчей</b>\n\n"
+    "Пришлите <b>один или несколько матчей одним сообщением</b> — каждый матч с новой строки:\n"
+    "<code>Команда1 - Команда2 | П1 X П2 Да Нет | дата время</code>\n\n"
+    "Пример:\n"
+    "<code>Реал - Барселона | 2.10 3.40 3.60 1.80 1.95 | 2026-10-06 21:00\n"
+    "Милан - Интер | 2.50 3.20 2.90 1.75 2.00 | 2026-10-07 19:45</code>\n\n"
+    "Дата: <code>2026-10-06 21:00</code>, <code>06.10.2026 21:00</code> или <code>06.10 21:00</code>.\n"
+    "Разделитель <code>|</code> необязателен. Уже существующие матчи пропускаются."
+)
+
+
 @admin_router.callback_query(F.data == "adm:add")
 async def match_add(c: CallbackQuery, state: FSMContext):
+    await c.message.edit_text(
+        BULK_HELP, parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [btn("🧩 Пошагово (по одному)", "adm:add1")],
+            [btn("❌ Отмена", "ui:cancel")]]))
+    await state.set_state(AStates.match_bulk)
+    await c.answer()
+
+
+@admin_router.message(AStates.match_bulk)
+async def match_bulk_done(m: Message, state: FSMContext):
+    if not is_admin(m.from_user.id):
+        return
+    lines = [ln for ln in (m.text or "").splitlines() if ln.strip()]
+    if not lines:
+        return await m.answer("Пришлите хотя бы одну строку с матчем.", reply_markup=cancel_kb())
+    added, skipped, errors = [], [], []
+    for i, ln in enumerate(lines, 1):
+        parsed, err = parse_match_line(ln)
+        if err:
+            errors.append(f"{i}. {ln.strip()[:60]} — {err}")
+            continue
+        t1, t2, (c1, cx, c2, cy, cn), start = parsed
+        if await match_exists(t1, t2, start):
+            skipped.append(f"{t1} — {t2} ({start})")
+            continue
+        mid = await add_match(t1, t2, c1, cx, c2, cy, cn, start)
+        added.append(f"#{mid} {t1} — {t2} | {start}")
+    out = [f"✅ Добавлено: {len(added)}"] + [f"  • {a}" for a in added]
+    if skipped:
+        out += [f"⏭ Уже были: {len(skipped)}"] + [f"  • {a}" for a in skipped]
+    if errors:
+        out += [f"⚠️ Не распознано: {len(errors)}"] + [f"  {e}" for e in errors]
+    text = "\n".join(out)
+    if len(text) > 3900:
+        text = text[:3900] + "\n…"
+    if errors and not added:
+        # ничего не добавлено — остаёмся в режиме ввода, можно исправить и отправить снова
+        return await m.answer(text + "\n\nИсправьте строки и отправьте снова.",
+                              reply_markup=cancel_kb())
+    await state.clear()
+    await m.answer(text, reply_markup=after_add_kb())
+
+
+@admin_router.callback_query(F.data == "adm:add1")
+async def match_add_single(c: CallbackQuery, state: FSMContext):
     await c.message.edit_text("Введите матч в формате:\n<code>Команда1 - Команда2</code>", reply_markup=cancel_kb())
     await state.set_state(AStates.match_teams)
     await c.answer()
@@ -494,7 +605,8 @@ async def match_time_done(m: Message, state: FSMContext):
     c1, cx, c2, cy, cn = data["coefs"]
     mid = await add_match(data["team1"], data["team2"], c1, cx, c2, cy, cn, m.text.strip())
     await state.clear()
-    await m.answer(f"✅ Матч #{mid} добавлен: {data['team1']} — {data['team2']}")
+    await m.answer(f"✅ Матч #{mid} добавлен: {data['team1']} — {data['team2']}",
+                   reply_markup=after_add_kb())
 
 
 @admin_router.callback_query(F.data.startswith("adm:m:"))
