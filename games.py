@@ -178,11 +178,11 @@ async def mines_start(m: Message, state: FSMContext):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     cells = random.sample(range(25), mines_n)
     g = {"bet": amount, "mines": list(cells), "mines_n": mines_n,
          "opened": [], "mult": 1.0}
@@ -274,11 +274,11 @@ async def crash_start(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     point = crash_point()
     t0 = time.monotonic()
@@ -385,11 +385,11 @@ async def coin_start(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     await bot.send_chat_action(m.chat.id, "typing")
     await asyncio.sleep(1)
@@ -407,6 +407,7 @@ async def coin_flip(bot: Bot, chat_id: int, uid: int, amount: int, side: str):
         await save_game(uid, "coin", {"amount": pot, "side": side}, pot)
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [btn(f"🔄 Удвоить {pot}", "cf:dbl")],
+            [btn(f"💰 Забрать {pot}", "cf:take")],
         ])
         await bot.send_message(
             chat_id,
@@ -418,6 +419,21 @@ async def coin_flip(bot: Bot, chat_id: int, uid: int, amount: int, side: str):
             chat_id,
             f"🪙 Выпала сторона: {COIN_SIDES[result][0]} — <b>не угадали.</b>\n"
             f"Ставка {amount} сгорела.", parse_mode="HTML")
+
+
+@games_router.callback_query(F.data == "cf:take")
+async def coin_take(c: CallbackQuery):
+    """Забрать выигрыш в монетке и завершить игру."""
+    uid = c.from_user.id
+    game = await get_game(uid)
+    if not game or game["game"] != "coin":
+        return await c.answer("Нечего забирать.", show_alert=True)
+    pot = game["state"]["amount"]
+    await delete_game(uid)
+    await c.message.edit_text(
+        f"💰 <b>Забрано: {pot} монет.</b> Игра завершена, приходите ещё!",
+        parse_mode="HTML")
+    await c.answer()
 
 
 @games_router.callback_query(F.data == "cf:dbl")
@@ -470,11 +486,11 @@ async def dice_play(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     msg = await bot.send_dice(m.chat.id, emoji="🎲")
     value = msg.dice.value
@@ -524,11 +540,11 @@ async def slots_play(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     msg = await bot.send_dice(m.chat.id, emoji="🎰")
     reels = slot_reels(msg.dice.value)
@@ -608,11 +624,11 @@ async def bj_start(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     g = {"bet": amount, "player": [bj_draw(), bj_draw()], "dealer": [bj_draw(), bj_draw()]}
     pv, dv = bj_value(g["player"]), bj_value(g["dealer"])
@@ -724,11 +740,11 @@ async def wheel_spin(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     await state.clear()
     mult = spin_wheel()
     pot = int(amount * mult)
