@@ -149,10 +149,10 @@ async def give_done(m: Message, state: FSMContext):
     try:
         uid, amount = map(int, m.text.split())
     except ValueError:
-        return await m.answer("Неверный формат. Пример: <code>123456789 500</code>")
+        return await m.answer("Неверный формат. Пример: <code>123456789 500</code>", reply_markup=cancel_kb())
     u = await get_user(uid)
     if not u:
-        return await m.answer("Пользователь не найден.")
+        return await m.answer("Пользователь не найден.", reply_markup=cancel_kb())
     await add_balance(uid, amount)
     await m.answer(f"✅ Готово. Новый баланс {uid}: {u['balance'] + amount}")
     await state.clear()
@@ -175,10 +175,10 @@ async def give2_done(m: Message, state: FSMContext):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите число.")
+        return await m.answer("Введите число.", reply_markup=cancel_kb())
     u = await get_user(data["uid"])
     if not u:
-        return await m.answer("Пользователь не найден.")
+        return await m.answer("Пользователь не найден.", reply_markup=cancel_kb())
     await add_balance(data["uid"], amount)
     await m.answer(f"✅ Готово. Новый баланс {data['uid']}: {u['balance'] + amount}")
     await state.clear()
@@ -198,9 +198,9 @@ async def ban_done(m: Message, state: FSMContext):
     try:
         uid = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите число.")
+        return await m.answer("Введите число.", reply_markup=cancel_kb())
     if not await get_user(uid):
-        return await m.answer("Пользователь не найден.")
+        return await m.answer("Пользователь не найден.", reply_markup=cancel_kb())
     await set_banned(uid, True)
     await m.answer(f"🔨 Пользователь {uid} забанен.")
     await state.clear()
@@ -213,7 +213,7 @@ async def unban_done(m: Message, state: FSMContext):
     try:
         uid = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите число.")
+        return await m.answer("Введите число.", reply_markup=cancel_kb())
     await set_banned(uid, False)
     await m.answer(f"✅ Пользователь {uid} разбанен.")
     await state.clear()
@@ -294,7 +294,7 @@ async def promo_new_done(m: Message, state: FSMContext):
         code, amount, n = m.text.split()
         amount, n = int(amount), int(n)
     except ValueError:
-        return await m.answer("Неверный формат. Пример: <code>BONUS500 500 10</code>")
+        return await m.answer("Неверный формат. Пример: <code>BONUS500 500 10</code>", reply_markup=cancel_kb())
     await create_promo(code, amount, n)
     await m.answer(f"✅ Промокод {code.upper()} создан: {amount} монет, {n} активаций.")
     await state.clear()
@@ -465,10 +465,10 @@ async def match_teams_done(m: Message, state: FSMContext):
     if not is_admin(m.from_user.id):
         return
     if "-" not in m.text:
-        return await m.answer("Используйте формат: <code>Команда1 - Команда2</code>")
+        return await m.answer("Используйте формат: <code>Команда1 - Команда2</code>", reply_markup=cancel_kb())
     team1, team2 = [t.strip() for t in m.text.split("-", 1)]
     if not team1 or not team2:
-        return await m.answer("Обе команды должны быть указаны.")
+        return await m.answer("Обе команды должны быть указаны.", reply_markup=cancel_kb())
     await state.update_data(team1=team1, team2=team2)
     await state.set_state(AStates.match_coefs)
     await m.answer("Введите 5 коэффициентов через пробел:\nкф_П1 кф_Х кф_П2 кф_обе_да кф_обе_нет\nПример: <code>2.10 3.40 3.60 1.80 1.95</code>", reply_markup=cancel_kb())
@@ -480,7 +480,7 @@ async def match_coefs_done(m: Message, state: FSMContext):
         return
     coefs = parse_coefs(m.text)
     if not coefs:
-        return await m.answer("Нужно 5 чисел через пробел. Пример: 2.10 3.40 3.60 1.80 1.95")
+        return await m.answer("Нужно 5 чисел через пробел. Пример: 2.10 3.40 3.60 1.80 1.95", reply_markup=cancel_kb())
     await state.update_data(coefs=coefs)
     await state.set_state(AStates.match_time)
     await m.answer("Введите время матча:\nПример: <code>2026-10-06 21:00</code>", reply_markup=cancel_kb())
@@ -522,7 +522,7 @@ async def match_coefs_edit_done(m: Message, state: FSMContext):
         return
     coefs = parse_coefs(m.text)
     if not coefs:
-        return await m.answer("Нужно 5 чисел через пробел.")
+        return await m.answer("Нужно 5 чисел через пробел.", reply_markup=cancel_kb())
     data = await state.get_data()
     await update_coefs(data["mid"], *coefs)
     await state.clear()
@@ -574,7 +574,7 @@ async def finish_result_done(m: Message, state: FSMContext):
         return
     res = parse_result(m.text)
     if not res:
-        return await m.answer("Введите 1, X или 2.")
+        return await m.answer("Введите 1, X или 2.", reply_markup=cancel_kb())
     await state.update_data(result=res)
     await state.set_state(AStates.fin_btts)
     await m.answer("Обе забьют? <code>да/нет</code>:", reply_markup=cancel_kb())
@@ -586,7 +586,7 @@ async def finish_btts_done(m: Message, state: FSMContext, bot: Bot):
         return
     btts = parse_btts(m.text)
     if not btts:
-        return await m.answer("Введите да или нет.")
+        return await m.answer("Введите да или нет.", reply_markup=cancel_kb())
     data = await state.get_data()
     await services.settle_match_full(bot, data["mid"], data["result"], btts)
     await state.clear()
@@ -611,7 +611,7 @@ async def result_edit_done(m: Message, state: FSMContext):
         return
     res = parse_result(m.text)
     if not res:
-        return await m.answer("Введите 1, X или 2.")
+        return await m.answer("Введите 1, X или 2.", reply_markup=cancel_kb())
     await state.update_data(result=res)
     await state.set_state(AStates.res_btts)
     await m.answer("Обе забьют? <code>да/нет</code>:", reply_markup=cancel_kb())
@@ -623,7 +623,7 @@ async def result_btts_done(m: Message, state: FSMContext, bot: Bot):
         return
     btts = parse_btts(m.text)
     if not btts:
-        return await m.answer("Введите да или нет.")
+        return await m.answer("Введите да или нет.", reply_markup=cancel_kb())
     data = await state.get_data()
     await services.resettle_match_full(bot, data["mid"], data["result"], btts)
     await state.clear()
