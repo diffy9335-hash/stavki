@@ -9,7 +9,7 @@ from config import (MIN_BET, ADMIN_IDS, REF_BONUS_REFERRER, REF_BONUS_NEW,
                     TOP_SIZE, TOP_MIN_COEF, CHANNEL_ID, ACHIEVEMENTS)
 from database import (register_user, get_user, get_stats, activate_promo,
                       claim_bonus, list_matches, get_match, get_balance,
-                      take_balance, record_bet, get_user_bets,
+                      take_balance, add_balance, record_bet, get_user_bets,
                       get_ref_stats, top_balance, top_day_wins, top_profit,
                       top_referrers, get_user_coupons,
                       send_gift, user_achievements,
@@ -259,7 +259,7 @@ async def gift_done(m: Message, state: FSMContext):
     try:
         to_id, amount = map(int, m.text.split())
     except ValueError:
-        return await m.answer("Неверный формат. Пример: <code>123456789 100</code>")
+        return await m.answer("Неверный формат. Пример: <code>123456789 100</code>", reply_markup=cancel_kb())
     ok, msg = await send_gift(m.from_user.id, to_id, amount)
     await state.clear()
     if ok:
@@ -477,11 +477,15 @@ async def bet_place(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
+    mt = await get_match(data["match_id"])
+    if not mt or mt["status"] != "open":
+        await state.clear()
+        return await m.answer("⛔ Матч уже недоступен для ставок (приём закрыт или матч удалён).")
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     pot = await record_bet(m.from_user.id, data["match_id"], "match",
                            data["bet_type"], amount, data["coef"])
     await state.clear()
@@ -561,15 +565,24 @@ async def expr_place(m: Message, state: FSMContext, bot: Bot):
     try:
         amount = int(m.text.strip())
     except ValueError:
-        return await m.answer("Введите целое число.")
+        return await m.answer("Введите целое число.", reply_markup=cancel_kb())
     if amount < MIN_BET:
-        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.")
+        return await m.answer(f"Минимальная ставка — {MIN_BET} монет.", reply_markup=cancel_kb())
+    coupon = await get_pending_coupon(m.from_user.id)
+    if not coupon or len(coupon["legs"]) < 2:
+        await state.clear()
+        return await m.answer("Экспресс не найден (нужно минимум 2 исхода).")
+    if any(l["mstatus"] != "open" for l in coupon["legs"]):
+        await clear_coupon(m.from_user.id)
+        await state.clear()
+        return await m.answer("⛔ Один из матчей уже недоступен — экспресс расформирован, ничего не списано.")
     if not await take_balance(m.from_user.id, amount):
-        return await m.answer("❌ Недостаточно монет.")
+        return await m.answer("❌ Недостаточно монет.", reply_markup=cancel_kb())
     res = await place_coupon(m.from_user.id, amount)
     await state.clear()
     if not res:
-        return await m.answer("Экспресс не найден.")
+        await add_balance(m.from_user.id, amount)  # возврат: деньги не должны теряться
+        return await m.answer("Экспресс не найден. Сумма ставки возвращена на баланс.")
     await m.answer(
         f"✅ Экспресс принят! Кэф x{res['coef']:.2f}\n"
         f"💰 Возможный выигрыш: {res['potential']} монет")
