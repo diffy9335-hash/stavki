@@ -36,7 +36,7 @@ RATE_LIMIT = 15           # максимум апдейтов от пользо�
 
 # --- Обязательная подписка (None или @channel / -100...) ---
 CHANNEL_ID = "@StavkiRoflf"
-CHANNEL_URL = "https://t.me/StavkiRofl"  # для кнопки «Подписаться»
+CHANNEL_URL = "https://t.me/StavkiRoflf"  # для кнопки «Подписаться»
 
 # --- Достижения: код -> (название, награда) ---
 ACHIEVEMENTS = {
